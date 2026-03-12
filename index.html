@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🌸 倫敦賞櫻地圖 2026</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600;700&family=Playfair+Display:ital,wght@0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<style>
+  :root {
+    --sakura-pink: #e8a0b4;
+    --deep-rose: #c2567a;
+    --blush: #f5dde6;
+    --petal-white: #fdf6f8;
+    --bark-dark: #2d1a22;
+    --bark-mid: #5c3347;
+    --leaf-green: #7a9e7e;
+    --gold: #d4a853;
+    --shadow: rgba(45,26,34,0.18);
+    --header-h: 108px;
+    --panel-w: 340px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(--petal-white); color: var(--bark-dark); overflow: hidden; }
+
+  /* petals */
+  .petal { position:fixed; pointer-events:none; z-index:1; border-radius:50% 0 50% 0; background:linear-gradient(135deg,#f2b8cb,#e8a0b4); opacity:0; animation:fall linear infinite; }
+  @keyframes fall { 0%{transform:translateY(-20px) rotate(0deg) translateX(0);opacity:.7} 100%{transform:translateY(100vh) rotate(360deg) translateX(40px);opacity:0} }
+
+  /* header */
+  header {
+    position:fixed; top:0; left:0; right:0; height:var(--header-h);
+    background:linear-gradient(160deg,var(--bark-dark) 0%,var(--bark-mid) 100%);
+    color:var(--petal-white); z-index:200;
+    display:flex; align-items:center; padding:0 1.5rem;
+    overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,.28);
+  }
+  header::before { content:'🌸'; position:absolute; right:-10px; top:-20px; font-size:8rem; opacity:.07; transform:rotate(-15deg); pointer-events:none; }
+  .header-inner { position:relative; z-index:2; display:flex; align-items:center; gap:1.5rem; width:100%; }
+  .header-tag { display:inline-block; background:var(--deep-rose); color:#fff; font-size:.6rem; letter-spacing:.15em; text-transform:uppercase; padding:.2rem .65rem; border-radius:20px; margin-bottom:.35rem; font-weight:500; }
+  h1 { font-family:'Playfair Display',serif; font-size:clamp(1.2rem,2.2vw,1.8rem); font-weight:700; line-height:1.15; margin-bottom:.1rem; }
+  .subtitle { font-size:.72rem; opacity:.65; font-weight:300; }
+  .timing-badge { display:inline-flex; align-items:center; gap:.4rem; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.2); border-radius:8px; padding:.32rem .8rem; font-size:.72rem; backdrop-filter:blur(10px); white-space:nowrap; margin-left:auto; }
+  .timing-badge strong { color:var(--sakura-pink); }
+  .panel-toggle-btn { display:flex; align-items:center; gap:.45rem; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.25); color:#fff; border-radius:10px; padding:.42rem .95rem; cursor:pointer; font-size:.76rem; font-family:'DM Sans',sans-serif; transition:background .2s; white-space:nowrap; flex-shrink:0; }
+  .panel-toggle-btn:hover { background:rgba(255,255,255,.22); }
+  .panel-toggle-btn .arrow { transition:transform .3s ease; display:inline-block; }
+  .panel-toggle-btn.open .arrow { transform:rotate(180deg); }
+
+  /* app shell */
+  .app-shell { position:fixed; top:var(--header-h); left:0; right:0; bottom:0; display:flex; flex-direction:column; overflow:hidden; }
+
+  /* map wrap */
+  .map-wrap { position:relative; flex:0 0 56%; min-height:200px; }
+  #map { width:100%; height:100%; background:#f0e8ec; }
+
+  /* blocker passes clicks through to markers via JS */
+  .map-blocker { position:absolute; inset:0; z-index:10; cursor:default; }
+
+  /* zoom extend — sits in the header toolbar */
+  .zoom-extend-btn {
+    display:flex; align-items:center; gap:.45rem;
+    background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.25);
+    color:#fff; border-radius:10px; padding:.42rem .95rem;
+    cursor:pointer; font-size:.76rem; font-family:'DM Sans',sans-serif;
+    transition:background .2s; white-space:nowrap; flex-shrink:0;
+  }
+  .zoom-extend-btn:hover { background:rgba(255,255,255,.22); }
+
+  /* info area */
+  .info-area { flex:1; overflow-y:auto; background:var(--petal-white); padding:1rem 1.5rem 2rem; }
+  .info-area::-webkit-scrollbar { width:4px; }
+  .info-area::-webkit-scrollbar-thumb { background:var(--sakura-pink); border-radius:4px; }
+
+  .map-placeholder { text-align:center; color:#9a7080; padding:2rem 1rem; font-size:.88rem; border:2px dashed #f0d0dc; border-radius:14px; background:#fff; }
+  .map-placeholder .big-icon { font-size:2.3rem; margin-bottom:.5rem; }
+
+  /* info card */
+  .info-card { display:none; border-radius:14px; overflow:hidden; border:1px solid #f0dae2; }
+  .info-card.visible { display:block; }
+
+  .info-card-header { padding:1.1rem 1.25rem .9rem; background:linear-gradient(135deg,var(--blush),#fff); display:flex; align-items:flex-start; gap:1rem; border-bottom:1px solid #f0dae2; }
+  .info-icon { width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:1.4rem; flex-shrink:0; }
+  .info-title-block h3 { font-family:'Playfair Display',serif; font-size:1.1rem; color:var(--bark-dark); margin-bottom:.18rem; }
+  .info-title-block .en-name { font-size:.73rem; color:#9a7080; }
+  .star-row { display:flex; gap:.1rem; margin-top:.18rem; }
+  .star { color:var(--gold); font-size:.76rem; }
+
+  /* photo strip */
+  .photo-strip {
+    display:flex; gap:.5rem; overflow-x:auto; padding:.85rem 1.25rem;
+    background:#fff; border-bottom:1px solid #f0dae2;
+    scroll-snap-type:x mandatory;
+  }
+  .photo-strip::-webkit-scrollbar { height:3px; }
+  .photo-strip::-webkit-scrollbar-thumb { background:var(--sakura-pink); border-radius:3px; }
+  .photo-thumb {
+    flex:0 0 160px; height:105px;
+    border-radius:8px; overflow:hidden; cursor:pointer;
+    scroll-snap-align:start; position:relative;
+    border:2px solid transparent; transition:border-color .2s, transform .2s;
+  }
+  .photo-thumb:hover { border-color:var(--deep-rose); transform:scale(1.02); }
+  .photo-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+  .photo-thumb .photo-cap {
+    position:absolute; bottom:0; left:0; right:0;
+    background:linear-gradient(transparent,rgba(45,26,34,.7));
+    color:#fff; font-size:.58rem; padding:.3rem .4rem;
+    font-weight:500; letter-spacing:.03em;
+  }
+
+  /* photo lightbox */
+  .lightbox {
+    display:none; position:fixed; inset:0; z-index:500;
+    background:rgba(20,8,14,.88); backdrop-filter:blur(6px);
+    align-items:center; justify-content:center;
+    flex-direction:column; gap:.75rem;
+  }
+  .lightbox.open { display:flex; }
+  .lightbox img { max-width:90vw; max-height:78vh; border-radius:12px; box-shadow:0 8px 40px rgba(0,0,0,.5); }
+  .lightbox-cap { color:rgba(255,255,255,.75); font-size:.78rem; letter-spacing:.04em; }
+  .lightbox-close { position:absolute; top:1.2rem; right:1.5rem; background:none; border:none; color:#fff; font-size:1.6rem; cursor:pointer; opacity:.7; }
+  .lightbox-close:hover { opacity:1; }
+
+  .info-body { padding:.9rem 1.25rem; display:grid; grid-template-columns:1fr 1fr; gap:.9rem; background:#fff; border-bottom:1px solid #f0dae2; }
+  @media(max-width:600px){ .info-body{grid-template-columns:1fr} }
+  .info-section h4 { font-size:.62rem; letter-spacing:.1em; text-transform:uppercase; color:var(--deep-rose); margin-bottom:.38rem; font-weight:600; }
+  .info-section p, .info-section li { font-size:.8rem; line-height:1.6; color:#4a3040; }
+  .info-section ul { list-style:none; padding:0; }
+  .info-section li { display:flex; gap:.3rem; align-items:baseline; }
+  .info-section li::before { content:'🌸'; font-size:.58rem; }
+
+  .info-badges { display:flex; gap:.42rem; flex-wrap:wrap; padding:.7rem 1.25rem 1rem; background:#fff; }
+  .badge { font-size:.68rem; padding:.15rem .55rem; border-radius:20px; font-weight:500; border:1.5px solid; }
+  .badge-free  { border-color:var(--leaf-green); color:var(--leaf-green); }
+  .badge-paid  { border-color:var(--gold); color:#a07020; }
+  .badge-crowd { border-color:var(--sakura-pink); color:var(--deep-rose); }
+  .badge-photo { border-color:#8090d0; color:#4050a0; }
+  .badge-early { border-color:#80b090; color:#2d6b3a; }
+
+  /* side panel */
+  .panel-overlay { display:none; position:fixed; inset:0; z-index:299; background:rgba(45,26,34,.35); backdrop-filter:blur(2px); }
+  .panel-overlay.open { display:block; }
+  .side-panel { position:fixed; top:var(--header-h); left:0; bottom:0; width:var(--panel-w); background:#fff; z-index:300; box-shadow:4px 0 30px rgba(45,26,34,.2); transform:translateX(-100%); transition:transform .35s cubic-bezier(.4,0,.2,1); display:flex; flex-direction:column; overflow:hidden; }
+  .side-panel.open { transform:translateX(0); }
+  .panel-header { background:linear-gradient(135deg,var(--blush),#f9eff3); padding:1rem 1.25rem; border-bottom:1px solid #f0dae2; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }
+  .panel-header h2 { font-family:'Noto Serif TC',serif; font-size:.88rem; font-weight:600; color:var(--bark-mid); }
+  .panel-header-right { display:flex; align-items:center; gap:.6rem; }
+  .spot-count { background:var(--deep-rose); color:#fff; font-size:.66rem; border-radius:12px; padding:.17rem .52rem; font-weight:500; }
+  .panel-close { background:none; border:none; cursor:pointer; color:var(--bark-mid); font-size:1rem; padding:0 .2rem; line-height:1; }
+  .spot-list { flex:1; overflow-y:auto; }
+  .spot-list::-webkit-scrollbar { width:4px; }
+  .spot-list::-webkit-scrollbar-thumb { background:var(--sakura-pink); border-radius:4px; }
+  .spot-item { display:flex; align-items:center; gap:.8rem; padding:.82rem 1.25rem; cursor:pointer; border-bottom:1px solid #faf0f3; transition:background .15s; }
+  .spot-item:hover { background:var(--blush); }
+  .spot-item.active { background:linear-gradient(135deg,#fce8ef,#f5d6e2); border-left:3px solid var(--deep-rose); }
+  .spot-icon { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.05rem; flex-shrink:0; border:2px solid transparent; transition:border-color .15s; }
+  .spot-item.active .spot-icon { border-color:var(--deep-rose); }
+  .spot-info { flex:1; min-width:0; }
+  .spot-name { font-family:'Noto Serif TC',serif; font-size:.84rem; font-weight:600; color:var(--bark-dark); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .spot-meta { font-size:.69rem; color:#9a7080; margin-top:.07rem; display:flex; align-items:center; gap:.3rem; }
+  .peak-tag { display:inline-block; font-size:.57rem; padding:.05rem .36rem; border-radius:8px; font-weight:500; letter-spacing:.04em; }
+  .peak-early { background:#d4f0da; color:#2d6b3a; }
+  .peak-mid   { background:#fce8ef; color:var(--deep-rose); }
+  .peak-late  { background:#e8e4f8; color:#5040a0; }
+  .panel-credit { text-align:center; font-size:.62rem; color:#b89aa8; letter-spacing:.08em; padding:.55rem; border-top:1px solid #f0dae2; flex-shrink:0; }
+
+  @media(max-width:640px){ :root{--panel-w:88vw} .timing-badge{display:none} }
+</style>
+</head>
+<body>
+
+<div id="petals"></div>
+
+<!-- LIGHTBOX -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+  <img id="lightboxImg" src="" alt="">
+  <div class="lightbox-cap" id="lightboxCap"></div>
+</div>
+
+<!-- HEADER -->
+<header>
+  <div class="header-inner">
+    <div>
+      <div class="header-tag">London Sakura 2026</div>
+      <h1>🌸 倫敦賞櫻地圖</h1>
+      <div class="subtitle">精選 8 大賞花勝地</div>
+    </div>
+    <div class="timing-badge">📅 最佳賞花期：<strong>三月下旬 — 四月中旬</strong></div>
+    <button class="zoom-extend-btn" onclick="zoomExtend()">⊞ 顯示全部</button>
+    <button class="panel-toggle-btn" id="panelToggle" onclick="togglePanel()">
+      🗂 精選地點 <span class="arrow">▲</span>
+    </button>
+  </div>
+</header>
+
+<!-- SIDE PANEL -->
+<div class="panel-overlay" id="panelOverlay" onclick="closePanel()"></div>
+<div class="side-panel" id="sidePanel">
+  <div class="panel-header">
+    <h2>精選地點</h2>
+    <div class="panel-header-right">
+      <span class="spot-count">8 個</span>
+      <button class="panel-close" onclick="closePanel()">✕</button>
+    </div>
+  </div>
+  <div class="spot-list" id="spotList"></div>
+  <div class="panel-credit">Design by Anzon Wong</div>
+</div>
+
+<!-- APP SHELL -->
+<div class="app-shell">
+  <div class="map-wrap">
+    <div id="map"></div>
+    <div class="map-blocker" id="mapBlocker"></div>
+  </div>
+
+  <div class="info-area" id="infoArea">
+    <div class="map-placeholder" id="selectPrompt">
+      <div class="big-icon">🗺️</div>
+      點擊地圖標記或右上角「精選地點」，查看詳細賞花資訊
+    </div>
+    <div class="info-card" id="infoCard">
+      <div class="info-card-header">
+        <div class="info-icon" id="cardIcon"></div>
+        <div class="info-title-block">
+          <h3 id="cardTitle"></h3>
+          <div class="en-name" id="cardEn"></div>
+          <div class="star-row" id="cardStars"></div>
+        </div>
+      </div>
+      <!-- Photo strip injected here -->
+      <div class="photo-strip" id="cardPhotos"></div>
+      <div class="info-body">
+        <div class="info-section"><h4>特色亮點</h4><ul id="cardHighlights"></ul></div>
+        <div class="info-section"><h4>賞花貼士</h4><p id="cardTips"></p></div>
+        <div class="info-section"><h4>花期預測</h4><p id="cardPeak"></p></div>
+        <div class="info-section"><h4>交通資訊</h4><p id="cardTransport"></p></div>
+      </div>
+      <div class="info-badges" id="cardBadges"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* ───────────────────────────────────────────────────
+   SPOT DATA  (photos use Unsplash + stable Wikimedia)
+─────────────────────────────────────────────────── */
+const spots = [
+  {
+    id:0, name:'邱園 Kew Gardens', en:'Royal Botanic Gardens, Kew',
+    icon:'🌿', iconBg:'#d4f0da', lat:51.4787, lng:-0.2956, peak:'mid', peakLabel:'四月初中', rating:4.7,
+    photos:[
+      { url:'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a7/Cherry_trees_in_blossom_by_the_Temperate_House%2C_Kew_Gardens_-_geograph.org.uk_-_166666.jpg/640px-Cherry_trees_in_blossom_by_the_Temperate_House%2C_Kew_Gardens_-_geograph.org.uk_-_166666.jpg', cap:'Temperate House 旁的粉紅花樹' },
+      { url:'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Kew_Gardens_Palm_House%2C_London_-_July_2009.jpg/640px-Kew_Gardens_Palm_House%2C_London_-_July_2009.jpg', cap:'Palm House 棕櫚溫室' },
+      { url:'https://images.unsplash.com/photo-1648476696375-0c4bdeae2c71?w=640&q=80', cap:'Cherry Walk 粉紅走廊' },
+    ],
+    highlights:['Cherry Walk — 兩排各15棵日本櫻形成粉紅走廊','Palm House 附近多個品種同時綻放','花期比其他公園長，品種達50種以上'],
+    tips:'需提前網上購票，人多時票會售罄。最好平日早上10點開門時入場，享受相對清靜的氣氛。',
+    peak_detail:'三月下旬至四月中旬，花期最長。部分品種如 Shirotae 早在三月中已開。',
+    transport:'地鐵 District Line → Kew Gardens 站，步行約10分鐘。由 St Albans 可乘火車至 Kew Bridge。',
+    badges:[['paid','需購票 £16-24'],['photo','攝影勝地'],['crowd','週末人多'],['early','建議早到']]
+  },
+  {
+    id:1, name:'Greenwich 公園', en:'Greenwich Cherry Blossom',
+    icon:'🌸', iconBg:'#fce8ef', lat:51.4745, lng:0.0009, peak:'mid', peakLabel:'四月初', rating:4.6,
+    photos:[
+      { url:'https://images.unsplash.com/photo-1611516491426-03025e6043c8?w=640&q=80', cap:'Greenwich 花隧道' },
+      { url:'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6c/Greenwich_Park_from_General_Wolfe_statue.jpg/640px-Greenwich_Park_from_General_Wolfe_statue.jpg', cap:'山丘眺望 Canary Wharf' },
+      { url:'https://images.unsplash.com/photo-1486325212027-8081e485255e?w=640&q=80', cap:'公園春日景色' },
+    ],
+    highlights:['著名「花隧道」，樹枝交錯形成拱廊','山丘上遠眺 Canary Wharf 天際線','樹下長凳，最適合野餐 Hanami'],
+    tips:'清晨六點已有攝影師等候！週末極度擁擠，建議平日或清晨前往。',
+    peak_detail:'四月初為高峰，花期約兩週。',
+    transport:'地鐵/DLR → Cutty Sark 或 Greenwich 站，步行約10分鐘。',
+    badges:[['free','免費入場'],['photo','必去打卡'],['crowd','極受歡迎'],['early','清晨最靚']]
+  },
+  {
+    id:2, name:'Battersea 公園', en:'Battersea Park — Cherry Tree Avenue',
+    icon:'🌺', iconBg:'#ffe8f0', lat:51.4791, lng:-0.1565, peak:'early', peakLabel:'三月中旬', rating:4.7,
+    photos:[
+      { url:'https://images.unsplash.com/photo-1522083165195-3424ed129620?w=640&q=80', cap:'Cherry Tree Avenue 長道' },
+      { url:'https://upload.wikimedia.org/wikipedia/commons/thumb/7/75/Albert_Bridge_from_the_south.jpg/640px-Albert_Bridge_from_the_south.jpg', cap:'Albert Bridge 河景' },
+      { url:'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=640&q=80', cap:'白色櫻花近景' },
+    ],
+    highlights:['Cherry Tree Avenue — 筆直長道密植白色櫻花','Thames 河景配 Albert Bridge，超浪漫','全倫敦最早開花的主要地點之一'],
+    tips:'三月中早上7:30前到，人少靜靚。側角度拍攝可避開人群，建議用70-200mm鏡頭。',
+    peak_detail:'三月中至下旬最佳，係全倫敦最早開花的主要地點。',
+    transport:'地鐵 Victoria/District Line → Sloane Square，或巴士 C3/44 直達。',
+    badges:[['free','免費入場'],['early','三月中開花'],['photo','攝影勝地']]
+  },
+  {
+    id:3, name:'Stanley Crescent, Notting Hill', en:'Stanley Crescent, Notting Hill',
+    icon:'🏠', iconBg:'#f0e8ff', lat:51.5145, lng:-0.2069, peak:'mid', peakLabel:'三月下旬', rating:4.8,
+    photos:[
+      { url:'https://images.unsplash.com/photo-1584738766473-61c083514bf4?w=640&q=80', cap:'Notting Hill 彩色排屋' },
+      { url:'https://images.unsplash.com/photo-1543783207-ec64e4d95325?w=640&q=80', cap:'粉紅花樹配彩色牆' },
+      { url:'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=640&q=80', cap:'Notting Hill 街道春景' },
+    ],
+    highlights:['全倫敦最 Instagram 打卡的巨型粉紅櫻花樹','配上彩色粉嫩排屋，童話感十足','附近 Chepstow Villas 亦有靚樹'],
+    tips:'清晨最佳，人群未聚集前。請尊重附近居民，勿爬圍欄或長時間佔據拍攝位。',
+    peak_detail:'三月下旬至四月初，此樹每年最早開花之一。',
+    transport:'地鐵 Circle/District Line → Notting Hill Gate 站，步行5分鐘。',
+    badges:[['free','免費'],['photo','Instagram 熱點'],['crowd','週末擁擠']]
+  },
+  {
+    id:4, name:"St Paul's 大教堂", en:"St Paul's Cathedral Churchyard",
+    icon:'⛪', iconBg:'#e8eeff', lat:51.5138, lng:-0.0984, peak:'early', peakLabel:'三月下旬', rating:4.7,
+    photos:[
+      { url:'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/St_Pauls_Cathedral_from_Ludgate_Hill.jpg/640px-St_Pauls_Cathedral_from_Ludgate_Hill.jpg', cap:'St Paul\'s 圓頂全景' },
+      { url:'https://images.unsplash.com/photo-1526129318478-62ed807ebdf9?w=640&q=80', cap:'倫敦春日紅電話亭' },
+      { url:'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=640&q=80', cap:'粉紅花枝配古典建築' },
+    ],
+    highlights:['粉紅花枝配 Wren 圓頂，倫敦最 iconic 構圖','紅色電話亭 + 大教堂 + 櫻花三合一','全倫敦最早開花的地點之一'],
+    tips:'在大教堂南面 Churchyard 拍攝，由馬路對面取景效果最佳。藍天時粉紅色最搶眼。',
+    peak_detail:'三月中下旬便要去，花謝快，係全倫敦最早開花地點之一。',
+    transport:"地鐵 Central Line → St Paul's 站，步行2分鐘。",
+    badges:[['free','免費'],['photo','Iconic 構圖'],['early','三月中去']]
+  },
+  {
+    id:5, name:'Kyoto Garden, Holland Park', en:'Kyoto Garden, Holland Park',
+    icon:'⛩️', iconBg:'#e8f0e8', lat:51.5030, lng:-0.2047, peak:'mid', peakLabel:'四月初', rating:4.7,
+    photos:[
+      { url:'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Kyoto_Garden%2C_Holland_Park_-_geograph.org.uk_-_978546.jpg/640px-Kyoto_Garden%2C_Holland_Park_-_geograph.org.uk_-_978546.jpg', cap:'京都庭園錦鯉池' },
+      { url:'https://images.unsplash.com/photo-1528360983277-13d401cdc186?w=640&q=80', cap:'日本庭園水景' },
+      { url:'https://images.unsplash.com/photo-1545579133-99bb5ad189be?w=640&q=80', cap:'和風禪意庭院' },
+    ],
+    highlights:['日本庭園風格，1991年京都市贈予倫敦','錦鯉池、小橋流水、瀑布配櫻花','孔雀漫步其中，禪意十足'],
+    tips:'免費入場，相對小眾，清靜感強。早上7:30開放，最適合冥想式賞花體驗。',
+    peak_detail:'四月初與 Holland Park 其他花樹同步開放。',
+    transport:'地鐵 Central Line → Holland Park 站，步行5分鐘。',
+    badges:[['free','免費入場'],['photo','禪意打卡'],['early','早上最靜']]
+  },
+  {
+    id:6, name:"St James's 公園", en:"St James's Park",
+    icon:'👑', iconBg:'#fff8e8', lat:51.5030, lng:-0.1340, peak:'early', peakLabel:'三月底', rating:4.7,
+    photos:[
+      { url:'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/St._James%27s_Park_Lake.jpg/640px-St._James%27s_Park_Lake.jpg', cap:"St James's Park 湖景" },
+      { url:'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d8/Buckingham_palace_Copyright_free.jpg/640px-Buckingham_palace_Copyright_free.jpg', cap:'白金漢宮全景' },
+      { url:'https://images.unsplash.com/photo-1529333166437-7750a6dd5a70?w=640&q=80', cap:'公園湖邊春日' },
+    ],
+    highlights:['湖邊白色與粉色櫻花，對面可見白金漢宮',"Storey's Gate 附近一排靚粉紅樹",'最早開花的皇家公園之一'],
+    tips:'沿湖邊完整走一圈，景色各有不同。白金漢宮一側的花樹特別早開，要趁早去。',
+    peak_detail:'三月底至四月初，部分樹更早開，係皇家公園中最早。',
+    transport:"地鐵 District/Circle Line → St James's Park 站。",
+    badges:[['free','免費'],['early','最早開花'],['crowd','遊客多']]
+  },
+  {
+    id:7, name:"Regent's Park", en:"The Regent's Park",
+    icon:'🌳', iconBg:'#e8f4e8', lat:51.5333, lng:-0.1558, peak:'mid', peakLabel:'四月初', rating:4.7,
+    photos:[
+      { url:'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7e/Regent%27s_Park_Avenue_of_Trees.jpg/640px-Regent%27s_Park_Avenue_of_Trees.jpg', cap:"Regent's Park 大道" },
+      { url:'https://images.unsplash.com/photo-1535016120720-40c646be5580?w=640&q=80', cap:'倫敦公園春天花景' },
+      { url:'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=640&q=80', cap:'花樹大道俯瞰' },
+    ],
+    highlights:['Chester Road 入口整排高身白色 Sunset Boulevard 品種','Avenue Gardens 南端成堆粉紅花樹','395英畝大公園，花期探索感強'],
+    tips:'由 Chester Road 門口入，右轉即見白色花隧道。可結合 Primrose Hill 一起行程。',
+    peak_detail:'四月初最佳，配合公園內水仙花、木蘭花同步盛開。',
+    transport:'地鐵 Bakerloo/Jubilee Line → Baker Street 站，步行10分鐘。',
+    badges:[['free','免費'],['photo','攝影天堂'],['early','早上清靜']]
+  }
+];
+
+/* ── Petals ── */
+const petalContainer = document.getElementById('petals');
+for(let i=0;i<14;i++){
+  const p=document.createElement('div'); p.className='petal';
+  p.style.left=Math.random()*100+'vw';
+  p.style.animationDuration=(6+Math.random()*9)+'s';
+  p.style.animationDelay=(Math.random()*12)+'s';
+  p.style.width=(5+Math.random()*7)+'px';
+  p.style.height=(7+Math.random()*9)+'px';
+  petalContainer.appendChild(p);
+}
+
+/* ── Map ── */
+const map = L.map('map',{
+  zoomControl:false, dragging:false,
+  scrollWheelZoom:false, doubleClickZoom:false,
+  touchZoom:false, keyboard:false, boxZoom:false,
+}).setView([51.505,-0.13],11);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  attribution:'© OpenStreetMap', maxZoom:18
+}).addTo(map);
+
+map.on('moveend zoomend',()=>{ map.dragging.disable(); });
+
+const allLatLngs = spots.map(s=>[s.lat,s.lng]);
+const fitBounds   = L.latLngBounds(allLatLngs).pad(0.1);
+map.fitBounds(fitBounds,{padding:[20,20]});
+
+function zoomExtend(){
+  map.flyToBounds(fitBounds,{duration:.9,padding:[20,20]});
+  document.querySelectorAll('.spot-item').forEach(el=>el.classList.remove('active'));
+  if(activeIdx>=0){ markers[activeIdx].setIcon(makeIcon(spots[activeIdx],false)); activeIdx=-1; }
+  document.getElementById('infoCard').classList.remove('visible');
+  document.getElementById('selectPrompt').style.display='';
+}
+
+function makeIcon(spot,active=false){
+  const sz=active?42:36, bw=active?3:2.5, border=active?'#8b1a4a':'#c2567a';
+  return L.divIcon({
+    className:'',
+    html:`<div style="background:${spot.iconBg};border:${bw}px solid ${border};border-radius:50% 50% 50% 0;transform:rotate(-45deg);width:${sz}px;height:${sz}px;display:flex;align-items:center;justify-content:center;box-shadow:0 ${active?5:3}px ${active?16:10}px rgba(0,0,0,${active?.3:.18});"><span style="transform:rotate(45deg);font-size:${active?1.2:1.0}rem">${spot.icon}</span></div>`,
+    iconSize:[sz,sz], iconAnchor:[sz/2,sz], popupAnchor:[0,-sz-4]
+  });
+}
+
+const markers=[];
+spots.forEach((s,i)=>{
+  const m=L.marker([s.lat,s.lng],{icon:makeIcon(s)}).addTo(map);
+  m.on('click',()=>selectSpot(i));
+  markers.push(m);
+});
+
+/* Blocker forwards clicks to nearest marker */
+document.getElementById('mapBlocker').addEventListener('click',function(e){
+  // Don't intercept if zoom button was clicked
+  if(e.target.id==='zoomBtn') return;
+  const rect=document.getElementById('map').getBoundingClientRect();
+  const point=map.containerPointToLatLng([e.clientX-rect.left, e.clientY-rect.top]);
+  let closest=-1, minDist=Infinity;
+  spots.forEach((s,i)=>{
+    const d=Math.hypot(s.lat-point.lat, s.lng-point.lng);
+    if(d<minDist){minDist=d;closest=i;}
+  });
+  if(closest>=0 && minDist<0.08) selectSpot(closest);
+});
+
+/* ── Panel ── */
+function togglePanel(){ document.getElementById('sidePanel').classList.contains('open') ? closePanel() : openPanel(); }
+function openPanel(){ document.getElementById('sidePanel').classList.add('open'); document.getElementById('panelOverlay').classList.add('open'); document.getElementById('panelToggle').classList.add('open'); }
+function closePanel(){ document.getElementById('sidePanel').classList.remove('open'); document.getElementById('panelOverlay').classList.remove('open'); document.getElementById('panelToggle').classList.remove('open'); }
+
+/* ── Spot list ── */
+spots.forEach((s,i)=>{
+  const div=document.createElement('div');
+  div.className='spot-item'; div.id='listItem'+i;
+  div.innerHTML=`<div class="spot-icon" style="background:${s.iconBg}">${s.icon}</div><div class="spot-info"><div class="spot-name">${s.name}</div><div class="spot-meta">⭐ ${s.rating}&nbsp;<span class="peak-tag peak-${s.peak}">${s.peakLabel}</span></div></div>`;
+  div.onclick=()=>{ selectSpot(i); closePanel(); };
+  document.getElementById('spotList').appendChild(div);
+});
+
+/* ── Lightbox ── */
+function openLightbox(url,cap){
+  document.getElementById('lightboxImg').src=url;
+  document.getElementById('lightboxCap').textContent=cap;
+  document.getElementById('lightbox').classList.add('open');
+}
+function closeLightbox(){ document.getElementById('lightbox').classList.remove('open'); }
+document.getElementById('lightbox').addEventListener('click',function(e){ if(e.target===this||e.target.id==='lightboxImg') closeLightbox(); });
+
+/* ── Select spot ── */
+let activeIdx=-1;
+function selectSpot(idx){
+  if(activeIdx>=0) markers[activeIdx].setIcon(makeIcon(spots[activeIdx],false));
+  markers[idx].setIcon(makeIcon(spots[idx],true));
+  activeIdx=idx;
+
+  document.querySelectorAll('.spot-item').forEach(el=>el.classList.remove('active'));
+  const li=document.getElementById('listItem'+idx);
+  if(li){ li.classList.add('active'); li.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+
+  const s=spots[idx];
+  map.flyTo([s.lat,s.lng],15,{duration:1.1});
+
+  // Header
+  document.getElementById('cardIcon').textContent=s.icon;
+  document.getElementById('cardIcon').style.background=s.iconBg;
+  document.getElementById('cardTitle').textContent=s.name;
+  document.getElementById('cardEn').textContent=s.en;
+
+  const starsEl=document.getElementById('cardStars');
+  starsEl.innerHTML='';
+  for(let i=0;i<Math.floor(s.rating);i++){const st=document.createElement('span');st.className='star';st.textContent='★';starsEl.appendChild(st);}
+  const rt=document.createElement('span'); rt.style.cssText='font-size:.72rem;color:#9a7080;margin-left:.3rem'; rt.textContent=s.rating; starsEl.appendChild(rt);
+
+  // Photos
+  const photosEl=document.getElementById('cardPhotos');
+  photosEl.innerHTML='';
+  (s.photos||[]).forEach(ph=>{
+    const thumb=document.createElement('div');
+    thumb.className='photo-thumb';
+    thumb.innerHTML=`<img src="${ph.url}" alt="${ph.cap}" loading="lazy" onerror="this.parentElement.style.display='none'"><div class="photo-cap">${ph.cap}</div>`;
+    thumb.onclick=()=>openLightbox(ph.url,ph.cap);
+    photosEl.appendChild(thumb);
+  });
+
+  // Info
+  const hl=document.getElementById('cardHighlights');
+  hl.innerHTML='';
+  s.highlights.forEach(h=>{const li=document.createElement('li');li.textContent=h;hl.appendChild(li);});
+  document.getElementById('cardTips').textContent=s.tips;
+  document.getElementById('cardPeak').textContent=s.peak_detail;
+  document.getElementById('cardTransport').textContent=s.transport;
+
+  const badgesEl=document.getElementById('cardBadges');
+  badgesEl.innerHTML='';
+  s.badges.forEach(([cls,label])=>{const sp=document.createElement('span');sp.className=`badge badge-${cls}`;sp.textContent=label;badgesEl.appendChild(sp);});
+
+  document.getElementById('infoCard').classList.add('visible');
+  document.getElementById('selectPrompt').style.display='none';
+  document.getElementById('infoArea').scrollTo({top:0,behavior:'smooth'});
+}
+</script>
+</body>
+</html>
