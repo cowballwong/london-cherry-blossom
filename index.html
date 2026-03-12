@@ -94,7 +94,9 @@
   .info-section li { display:flex; gap:.3rem; align-items:baseline; }
   .info-section li::before { content:'🌸'; font-size:.58rem; }
 
-  .info-badges { display:flex; gap:.42rem; flex-wrap:wrap; padding:.7rem 1.25rem 1rem; background:#fff; }
+  .gmap-link { display:inline-flex; align-items:center; gap:.4rem; margin:.7rem 1.25rem 0; padding:.45rem 1rem; background:var(--deep-rose); color:#fff; text-decoration:none; border-radius:8px; font-size:.78rem; font-weight:500; transition:background .2s; }
+  .gmap-link:hover { background:var(--bark-mid); }
+  .info-badges { display:flex; gap:.42rem; flex-wrap:wrap; padding:.5rem 1.25rem 1rem; background:#fff; }
   .badge { font-size:.68rem; padding:.15rem .55rem; border-radius:20px; font-weight:500; border:1.5px solid; }
   .badge-free  { border-color:var(--leaf-green); color:var(--leaf-green); }
   .badge-paid  { border-color:var(--gold); color:#a07020; }
@@ -193,6 +195,7 @@
         <div class="info-section"><h4>花期預測</h4><p id="cardPeak"></p></div>
         <div class="info-section"><h4>交通資訊</h4><p id="cardTransport"></p></div>
       </div>
+      <a class="gmap-link" id="cardGmap" href="#" target="_blank" rel="noopener">📍 Google Maps</a>
       <div class="info-badges" id="cardBadges"></div>
     </div>
   </div>
@@ -391,6 +394,7 @@ function selectSpot(idx){
   document.getElementById('cardTips').textContent=s.tips;
   document.getElementById('cardPeak').textContent=s.peak_detail;
   document.getElementById('cardTransport').textContent=s.transport;
+  document.getElementById('cardGmap').href=`https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}`;
 
   const badgesEl=document.getElementById('cardBadges');
   badgesEl.innerHTML='';
